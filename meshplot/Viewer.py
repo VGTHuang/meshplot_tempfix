@@ -11,12 +11,12 @@ import uuid
 class Viewer():
     def __init__(self, settings):
         self.__update_settings(settings)
-        self._light = p3s.DirectionalLight(color='white', position=[0, 0, 1], intensity=0.6)
-        self._light2 = p3s.AmbientLight(intensity=0.5)
+        self._light = p3s.RectAreaLight(color='white', intensity=1, width=100, height=100)
+        self._light2 = p3s.AmbientLight(intensity=0.6)
         self._cam = p3s.PerspectiveCamera(position=[0, 0, 1], lookAt=[0, 0, 0], fov=self.__s["fov"],
-                                     aspect=self.__s["width"]/self.__s["height"], children=[self._light])
+                                     aspect=self.__s["width"]/self.__s["height"])
         self._orbit = p3s.OrbitControls(controlling=self._cam)
-        self._scene = p3s.Scene(children=[self._cam, self._light2], background=self.__s["background"])#"#4c4c80"
+        self._scene = p3s.Scene(children=[self._cam, self._light, self._light2], background=self.__s["background"])#"#4c4c80"
         self._renderer = p3s.Renderer(camera=self._cam, scene = self._scene, controls=[self._orbit],
                     width=self.__s["width"], height=self.__s["height"], antialias=self.__s["antialias"])
 
@@ -62,11 +62,10 @@ class Viewer():
         lines = lines.astype("float32", copy=False)
         mi = np.min(lines, axis=0)
         ma = np.max(lines, axis=0)
-        
-        geometry = p3s.LineSegmentsGeometry(positions=lines.reshape((-1, 2, 3)))
-        material = p3s.LineMaterial(linewidth=shading["line_width"], color=shading["line_color"])
+        geometry = p3s.BufferGeometry(attributes={'position': p3s.BufferAttribute(lines, normalized=False)})
+        material = p3s.LineBasicMaterial(linewidth=shading["line_width"], color=shading["line_color"])
                     #, vertexColors='VertexColors'),
-        lines = p3s.LineSegments2(geometry=geometry, material=material) #type='LinePieces')
+        lines = p3s.LineSegments(geometry=geometry, material=material) #type='LinePieces')
         line_obj = {"geometry": geometry, "mesh": lines, "material": material,
                     "max": ma, "min": mi, "type": "Lines", "wireframe": None}
 
@@ -91,7 +90,7 @@ class Viewer():
         self._orbit.target = mean
         self._cam.lookAt(mean)
         self._cam.position = [mean[0], mean[1], mean[2]+scale]
-        self._light.position = [mean[0], mean[1], mean[2]+scale]
+        self._light.position = [mean[0], mean[1], mean[2]-scale]
 
         self._orbit.exec_three_obj_method('update')
         self._cam.exec_three_obj_method('updateProjectionMatrix')
@@ -179,8 +178,7 @@ class Viewer():
 
         return colors, v_color
 
-    def add_mesh(self, v, f, c=None, uv=None, n=None, shading={}, texture_data=None, **kwargs):
-        shading.update(kwargs)
+    def add_mesh(self, v, f, c=None, uv=None, n=None, shading={}, texture_data=None):
         sh = self.__get_shading(shading)
         mesh_obj = {}
 
@@ -280,8 +278,7 @@ class Viewer():
         return self.__add_object(mesh_obj)
 
 
-    def add_lines(self, beginning, ending, shading={}, obj=None, **kwargs):
-        shading.update(kwargs)
+    def add_lines(self, beginning, ending, shading={}, obj=None):
         if len(beginning.shape) == 1:
             if len(beginning) == 2:
                 beginning = np.array([[beginning[0], beginning[1], 0]])
@@ -302,8 +299,7 @@ class Viewer():
         lines = lines.reshape((-1, 3))
         return self.__add_line_geometry(lines, sh, obj)
 
-    def add_edges(self, vertices, edges, shading={}, obj=None, **kwargs):
-        shading.update(kwargs)
+    def add_edges(self, vertices, edges, shading={}, obj=None):
         if vertices.shape[1] == 2:
             vertices = np.append(
                 vertices, np.zeros([vertices.shape[0], 1]), 1)
@@ -316,8 +312,7 @@ class Viewer():
             cnt += 2
         return self.__add_line_geometry(lines, sh, obj)
 
-    def add_points(self, points, c=None, shading={}, obj=None, **kwargs):
-        shading.update(kwargs)
+    def add_points(self, points, c=None, shading={}, obj=None):
         if len(points.shape) == 1:
             if len(points) == 2:
                 points = np.array([[points[0], points[1], 0]])
@@ -422,10 +417,9 @@ class Viewer():
 #        self.scene.exec_three_obj_method('update')
 
 
-    def add_text(self, text, shading={}, **kwargs):
-        shading.update(kwargs)
-        sh = self.__get_shading(shading)
-        tt = p3s.TextTexture(string=text, color=sh["text_color"])
+    def add_text(self, text, shading={}):
+        self.update_shading(shading)
+        tt = p3s.TextTexture(string=text, color=self.s["text_color"])
         sm = p3s.SpriteMaterial(map=tt)
         self.text = p3s.Sprite(material=sm, scaleToTexture=True)
         self.scene.add(self.text)
@@ -468,7 +462,6 @@ class Viewer():
         self._orbit.target = [0.0, 0.0, 0.0]
         self._cam.lookAt([0.0, 0.0, 0.0])
         self._cam.position = [0.0, 0.0, scale]
-        self._light.position = [0.0, 0.0, scale]
 
 
         state = embed.dependency_state(self._renderer)
